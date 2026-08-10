@@ -336,7 +336,7 @@ int main(int argc, char ** argv)
   Lidar_R_wrt_IMU << MAT_FROM_ARRAY(extrinR);
 
   if (extrinsic_est_en) {
-    if (!use_imu_as_input) {
+    if (!use_imu_as_input) { // 是否将 imu 的 gyr 和 acc 作为状态的一部分， use_imu_as_input 还会影响到后面的程序
       kf_output.x_.offset_R_L_I = Lidar_R_wrt_IMU;
       kf_output.x_.offset_T_L_I = Lidar_T_wrt_IMU;
     } else {
@@ -402,6 +402,7 @@ int main(int argc, char ** argv)
         RCLCPP_WARN(LOGGER, "reset when rosbag play back");
         p_imu->Reset();
         feats_undistort.reset(new PointCloudXYZI());
+        // 注意这里的标志，use_imu_as_input 表示将 gyr 和 acc 作为控制输入
         if (use_imu_as_input) {
           // state_in = kf_input.get_x();
           state_in = state_input();
@@ -570,6 +571,9 @@ int main(int argc, char ** argv)
           crossmat_list[i] = point_crossmat;
         }
       }
+
+
+      // use_imu_as_input 为 false 的时，说明 imu 的 gyr 和 acc 是作为状态而不是控制输入
       if (!use_imu_as_input) {
         bool imu_upda_cov = false;
         effct_feat_num = 0;
