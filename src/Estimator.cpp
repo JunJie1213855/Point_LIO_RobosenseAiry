@@ -121,6 +121,7 @@ void h_model_input(
   for (int j = 0; j < time_seq[k]; j++) {
     PointType & point_body_j = feats_down_body->points[idx + j + 1];
     PointType & point_world_j = feats_down_world->points[idx + j + 1];
+    // 点云去畸变
     pointBodyToWorld(&point_body_j, &point_world_j);
     V3D p_body = pbody_list[idx + j + 1];
     double p_norm = p_body.norm();
@@ -130,11 +131,12 @@ void h_model_input(
       auto & points_near = Nearest_Points[idx + j + 1];
       ivox_->GetClosestPoint(point_world_j, points_near, NUM_MATCH_POINTS);  //
       if ((points_near.size() <
-           NUM_MATCH_POINTS))  // || pointSearchSqDis[NUM_MATCH_POINTS - 1] > 5) // 5)
+           NUM_MATCH_POINTS))  // || pointSearchSqDis[NUM_MATCH_POINTS - 1] > 5) // 5) 近邻点少，无效
       {
         point_selected_surf[idx + j + 1] = false;
       } else {
         point_selected_surf[idx + j + 1] = false;
+        // 评估该点是否在平面上
         if (esti_plane(pabcd, points_near, plane_thr))  //(planeValid)
         {
           float pd2 = fabs(
@@ -159,7 +161,7 @@ void h_model_input(
           // 	pabcd(2) = weight * pabcd(2);
           // 	pabcd(3) = weight * pabcd(3);
           // }
-          if (p_norm > match_s * pd2 * pd2) {
+          if (p_norm > match_s * pd2 * pd2) { // 噪声滤波通过，保持有效
             point_selected_surf[idx + j + 1] = true;
             normvec->points[j].x = pabcd(0);
             normvec->points[j].y = pabcd(1);
@@ -235,10 +237,11 @@ void h_model_output(
     {
       auto & points_near = Nearest_Points[idx + j + 1];
 
+      // 最近邻点获取
       ivox_->GetClosestPoint(point_world_j, points_near, NUM_MATCH_POINTS);  //
 
       if ((points_near.size() <
-           NUM_MATCH_POINTS))  // || pointSearchSqDis[NUM_MATCH_POINTS - 1] > 5)
+           NUM_MATCH_POINTS))  // || pointSearchSqDis[NUM_MATCH_POINTS - 1] > 5) 如果近邻点的数量少，无效点
       {
         point_selected_surf[idx + j + 1] = false;
       } else {
@@ -266,9 +269,9 @@ void h_model_output(
           // 	pabcd(2) = weight * pabcd(2);
           // 	pabcd(3) = weight * pabcd(3);
           // }
-          if (p_norm > match_s * pd2 * pd2) {
+          if (p_norm > match_s * pd2 * pd2) { // 噪声率通过
             // point_selected_surf[i] = true;
-            point_selected_surf[idx + j + 1] = true;
+            point_selected_surf[idx + j + 1] = true; // 设置该点有效
             normvec->points[j].x = pabcd(0);
             normvec->points[j].y = pabcd(1);
             normvec->points[j].z = pabcd(2);

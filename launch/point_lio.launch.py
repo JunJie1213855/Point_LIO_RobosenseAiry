@@ -35,7 +35,7 @@ def generate_launch_description():
 
     declare_point_lio_cfg_dir = DeclareLaunchArgument(
         "point_lio_cfg_dir",
-        default_value=PathJoinSubstitution([point_lio_dir, "config", "mid360.yaml"]),
+        default_value=PathJoinSubstitution([point_lio_dir, "config", "avia.yaml"]),
         description="Path to the Point-LIO config file",
     )
 
@@ -57,8 +57,7 @@ def generate_launch_description():
         remappings=remappings,
         arguments=[
             "-d",
-            PathJoinSubstitution([point_lio_dir, "rviz_cfg", "loam_livox"]),
-            ".rviz",
+            PathJoinSubstitution([point_lio_dir, "rviz_cfg", "pointlio_robosense.rviz"]),
         ],
     )
 
