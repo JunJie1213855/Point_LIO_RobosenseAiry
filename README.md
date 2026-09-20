@@ -1,7 +1,4 @@
 # Point-LIO
-
-> ROS2 Fork repo maintainer: [LihanChen2004](https://github.com/LihanChen2004)
-
 ## Point-LIO: Robust High-Bandwidth Lidar-Inertial Odometry
 
 ## Branch: RM25_SMBU_auto_sentry
