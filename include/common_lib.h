@@ -21,12 +21,10 @@ typedef MTK::S2<double, 98090, 10000, 1> S2;
 typedef MTK::vect<1, double> vect1;
 typedef MTK::vect<2, double> vect2;
 
-// kf_input 的状态流形
 MTK_BUILD_MANIFOLD(
   state_input, ((vect3, pos))((SO3, rot))((SO3, offset_R_L_I))((vect3, offset_T_L_I))((vect3, vel))(
                  (vect3, bg))((vect3, ba))((vect3, gravity)));
 
-// kf_output 的状态流形：状态多了 omg 和 acc
 MTK_BUILD_MANIFOLD(
   state_output,
   ((vect3, pos))((SO3, rot))((SO3, offset_R_L_I))((vect3, offset_T_L_I))((vect3, vel))(
@@ -39,10 +37,7 @@ MTK_BUILD_MANIFOLD(process_noise_input, ((vect3, ng))((vect3, na))((vect3, nbg))
 MTK_BUILD_MANIFOLD(
   process_noise_output, ((vect3, vel))((vect3, ng))((vect3, na))((vect3, nbg))((vect3, nba)));
 
-// 没有角速度和加速度作为状态（作为输入）
 extern esekfom::esekf<state_input, 24, input_ikfom> kf_input;
-
-// 有角速度和加速度作为状态
 extern esekfom::esekf<state_output, 30, input_ikfom> kf_output;
 
 #define PBWIDTH 30

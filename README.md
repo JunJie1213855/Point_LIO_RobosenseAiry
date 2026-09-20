@@ -92,6 +92,8 @@ sudo apt-get install ros-$ROS_DISTRO-pcl-conversions
 Following the official [Eigen installation](eigen.tuxfamily.org/index.php?title=Main_Page), or directly install Eigen by:
 
 ```sh
+
+```sh
 sudo apt-get install libeigen3-dev
 ```
 
@@ -159,64 +161,7 @@ Edit ` config/mid360.yaml ` to set the below parameters:
 
 6. The norm of IMU's acceleration according to unit of acceleration messages: ` acc_norm `
 
-### 5.3 For RoboSense Airy
-
-RoboSense Airy 是一款 96 线激光雷达，输出 **organized PointCloud2**，每个点携带 `ring` 和 `timestamp` 字段。
-
-**与标准雷达的关键区别：**
-
-- Airy 使用 `robosense_ros::Point` 自定义点结构（含 `x, y, z, intensity, ring, timestamp`），时间戳为**秒级**（`timestamp_unit: 0`）
-- 支持 **cut_frame** 模式：将一帧点云切分为多个子帧以适配 Point-LIO 的逐点处理模型。默认 `cut_frame_num: 5`（切成 5 个子帧）
-- 因为点云为 organized 结构（`width × height`），切帧时按高度维度等分，每个子帧提取自己的起止时间戳
-- 如果点云消息**缺少** `ring` 或 `timestamp` 字段，handler 会降级为标准 `PointXYZI` 处理并使用消息头时间戳（但会丢失逐点时间信息，不推荐）
-
-**Step A: 准备配置文件**
-
-编辑 `config/robosenseAiry.yaml`，设置以下参数：
-
-1. LiDAR 点云话题名: `lid_topic`（默认 `/rslidar_points`）
-2. IMU 话题名: `imu_topic`（默认 `/rslidar_imu_data`）
-3. 雷达类型: `preprocess.lidar_type: 5`（ROBOAIRY）
-4. 线数: `preprocess.scan_line: 96`（Airy 为 96 线）
-5. 时间戳单位: `preprocess.timestamp_unit: 0`（SEC=0，Airy 点云的 timestamp 字段单位为秒，代码内部转换为 ms 写入 curvature 字段）
-6. **cut_frame 设置**:
-   - `common.cut_frame: True` — 启用切帧
-   - `common.cut_frame_init: True` — 启动时即按切帧模式初始化
-   - `common.cut_frame_num: 5` — 每帧切成 5 个子帧
-   - `common.cut_frame_time_interval: 0.1` — 子帧时间间隔（秒），应为 1/雷达频率 的整数分之一
-7. 平移外参: `mapping.extrinsic_T` — LiDAR 在 IMU 坐标系下的位置
-8. 旋转外参: `mapping.extrinsic_R` — LiDAR 在 IMU 坐标系下的旋转矩阵
-9. IMU 饱和值: `mapping.satu_acc`、`mapping.satu_gyro`
-10. 加速度范数: `mapping.acc_norm`（1.0 = g 单位，9.81 = m/s² 单位）
-
-**Step B: 运行**
-
-```sh
-    cd ~/$Point_LIO_ROS_DIR$
-    source install/setup.bash
-    ros2 launch point_lio point_lio_robosenseAiry.launch.py
-```
-
-或者使用通用 launch 文件指定配置:
-
-```sh
-    ros2 launch point_lio point_lio.launch.py point_lio_cfg_dir:=/path/to/Point-LIO/config/robosenseAiry.yaml
-```
-
-**Step C: 启动雷达 ROS 驱动或播放 rosbag**
-
-**实现说明：**
-
-robosense_handler 的核心逻辑在 `src/preprocess.cpp:707-835`：
-
-- 首先检查点云字段中是否包含 `ring` 和 `timestamp`，缺失时降级为基本 PointXYZI 处理
-- 有 ring+timestamp 时，使用 `robosense_ros::Point` 结构直接解析 organized 点云
-- 子帧切分：按点云高度维度将 `pl_orig.height / num_sub_cloud` 行点分配给每个子帧
-- 每个子帧的首点和末点的 `timestamp` 字段分别作为该子帧的 `start_time` 和 `end_time`
-- 逐点 curvature 计算：`(ori_point.timestamp - start_time) * time_unit_scale`，单位为 ms
-- 距离滤波：`range < 150m` 且 `range > blind`
-
-### 5.4 For Velodyne or Ouster (Velodyne as an example)
+### 5.3 For Velodyne or Ouster (Velodyne as an example)
 
 Step A: Setup before run
 
@@ -250,7 +195,7 @@ Step B: Run below
 
 Step C: Run LiDAR's ros driver or play rosbag.
 
-### 5.5 PCD file save
+### 5.4 PCD file save
 
 Set ` pcd_save_enable ` in launch file to ` 1 `. All the scans (in global frame) will be accumulated and saved to the file ` Point-LIO/PCD/scans.pcd ` after the Point-LIO is terminated. `pcl_viewer scans.pcd` can visualize the point clouds.
 

@@ -115,7 +115,7 @@ public:
     // f_w = f_w_in;
     h_dyn_share_modified_1 = h_dyn_share_in1;
     // h_dyn_share_modified_3 = h_dyn_share_in3;
-    maximum_iter = 1; // 仅仅迭代一次 !!!!
+    maximum_iter = 1;
     x_.build_S2_state();
     x_.build_SO3_state();
     x_.build_vect_state();
@@ -133,7 +133,7 @@ public:
     h_dyn_share_modified_1 = h_dyn_share_in1;
     h_dyn_share_modified_2 = h_dyn_share_in2;
     // h_dyn_share_modified_3 = h_dyn_share_in3;
-    maximum_iter = 1; // 仅仅迭代一次 !!!!
+    maximum_iter = 1;
     x_.build_S2_state();
     x_.build_SO3_state();
     x_.build_vect_state();
