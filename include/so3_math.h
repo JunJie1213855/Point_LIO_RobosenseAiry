@@ -8,6 +8,8 @@
 
 #define SKEW_SYM_MATRX(v) 0.0,-v[2],v[1],v[2],0.0,-v[0],-v[1],v[0],0.0
 
+// 反对称矩阵算子
+// [v]x
 template<typename T>
 Eigen::Matrix<T, 3, 3> skew_sym_mat(const Eigen::Matrix<T, 3, 1> &v)
 {
@@ -16,6 +18,7 @@ Eigen::Matrix<T, 3, 3> skew_sym_mat(const Eigen::Matrix<T, 3, 1> &v)
     return skew_sym_mat;
 }
 
+// 旋转向量的Exp算子
 template<typename T>
 Eigen::Matrix<T, 3, 3> Exp(const Eigen::Matrix<T, 3, 1> &ang)
 {
@@ -35,6 +38,7 @@ Eigen::Matrix<T, 3, 3> Exp(const Eigen::Matrix<T, 3, 1> &ang)
     }
 }
 
+// 带有积分时间的旋转向量的Exp算子
 template<typename T, typename Ts>
 Eigen::Matrix<T, 3, 3> Exp(const Eigen::Matrix<T, 3, 1> &ang_vel, const Ts &dt)
 {
@@ -58,7 +62,7 @@ Eigen::Matrix<T, 3, 3> Exp(const Eigen::Matrix<T, 3, 1> &ang_vel, const Ts &dt)
         return Eye3;
     }
 }
-
+// 旋转向量的Exp算子，标量输入
 template<typename T>
 Eigen::Matrix<T, 3, 3> Exp(const T &v1, const T &v2, const T &v3)
 {
@@ -80,6 +84,7 @@ Eigen::Matrix<T, 3, 3> Exp(const T &v1, const T &v2, const T &v3)
 }
 
 /* Logrithm of a Rotation Matrix */
+// 旋转矩阵的Log算子
 template<typename T>
 Eigen::Matrix<T,3,1> Log(const Eigen::Matrix<T, 3, 3> R)
 {
@@ -88,6 +93,7 @@ Eigen::Matrix<T,3,1> Log(const Eigen::Matrix<T, 3, 3> R)
     return (std::abs(theta) < 0.001) ? (0.5 * K) : (0.5 * theta / std::sin(theta) * K);
 }
 
+// 旋转矩阵转欧拉角
 template<typename T>
 Eigen::Matrix<T, 3, 1> RotMtoEuler(const Eigen::Matrix<T, 3, 3> &rot)
 {
@@ -110,6 +116,9 @@ Eigen::Matrix<T, 3, 1> RotMtoEuler(const Eigen::Matrix<T, 3, 3> &rot)
     return ang;
 }
 
+// 右雅可比矩阵逆求解
+// 输入：v
+// 输出：J_r^{-1}(v)
 template<typename T>
 Eigen::Matrix3d Jacob_right_inv(Eigen::Vector3d &vec){
     Eigen::Matrix3d hat_v, res;

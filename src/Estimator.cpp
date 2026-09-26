@@ -321,10 +321,13 @@ void h_model_output(
   effct_feat_num += effect_num_k;
 }
 
+// 以角速度、加速度作为状态时的观测方程输出
 void h_model_IMU_output(state_output & s, esekfom::dyn_share_modified<double> & ekfom_data)
 {
   std::memset(ekfom_data.satu_check, false, 6);
+  // 角速度残差
   ekfom_data.z_IMU.block<3, 1>(0, 0) = angvel_avr - s.omg - s.bg;
+  // 加速度残差
   ekfom_data.z_IMU.block<3, 1>(3, 0) = acc_avr * G_m_s2 / acc_norm - s.acc - s.ba;
   ekfom_data.R_IMU << imu_meas_omg_cov, imu_meas_omg_cov, imu_meas_omg_cov, imu_meas_acc_cov,
     imu_meas_acc_cov, imu_meas_acc_cov;
@@ -361,25 +364,26 @@ void h_model_IMU_output(state_output & s, esekfom::dyn_share_modified<double> & 
   }
 }
 
+// 单个三维点去畸变
 void pointBodyToWorld(PointType const * const pi, PointType * const po)
 {
   V3D p_body(pi->x, pi->y, pi->z);
 
   V3D p_global;
-  if (extrinsic_est_en) {
-    if (!use_imu_as_input) {
+  if (extrinsic_est_en) { // extrinsic_est_en 区别在于，ieskf 还需要更新 imu 和 lidar 的外参，如下 offset_R_L_I 和 Lidar_R_wrt_IMU、offset_T_L_I 和 Lidar_T_wrt_IMU 
+    if (!use_imu_as_input) { // 采用 kf_output 的状态补偿去畸变
       p_global =
         kf_output.x_.rot * (kf_output.x_.offset_R_L_I * p_body + kf_output.x_.offset_T_L_I) +
         kf_output.x_.pos;
-    } else {
+    } else {                 // 采用 kf_input 的状态补偿去畸变
       p_global = kf_input.x_.rot * (kf_input.x_.offset_R_L_I * p_body + kf_input.x_.offset_T_L_I) +
                  kf_input.x_.pos;
     }
-  } else {
-    if (!use_imu_as_input) {
+  } else {                  
+    if (!use_imu_as_input) {  // 采用 kf_output 的状态补偿去畸变
       p_global = kf_output.x_.rot * (Lidar_R_wrt_IMU * p_body + Lidar_T_wrt_IMU) +
                  kf_output.x_.pos;  // .normalized()
-    } else {
+    } else {                  // 采用 kf_input 的状态补偿去畸变
       p_global = kf_input.x_.rot * (Lidar_R_wrt_IMU * p_body + Lidar_T_wrt_IMU) +
                  kf_input.x_.pos;  // .normalized()
     }

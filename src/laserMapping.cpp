@@ -30,7 +30,7 @@ double match_time = 0, solve_time = 0, propag_time = 0, update_time = 0;
 
 bool flg_reset = false, flg_exit = false;
 
-//surf feature in map
+// surf feature in map
 PointCloudXYZI::Ptr feats_undistort(new PointCloudXYZI());
 PointCloudXYZI::Ptr feats_down_body_space(new PointCloudXYZI());
 PointCloudXYZI::Ptr init_feats_world(new PointCloudXYZI());
@@ -312,10 +312,11 @@ int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);
   auto nh = std::make_shared<rclcpp::Node>("laserMapping");
-
+  // 多线程执行器启动
   rclcpp::executors::MultiThreadedExecutor executor;
   executor.add_node(nh);
 
+  // 阅读参数
   readParameters(nh);
   std::cout << "lidar_type: " << lidar_type << '\n';
   ivox_ = std::make_shared<IVoxType>(ivox_options_);
@@ -327,14 +328,15 @@ int main(int argc, char ** argv)
   int frame_num = 0;
   double aver_time_consu = 0, aver_time_icp = 0, aver_time_match = 0, aver_time_incre = 0,
          aver_time_solve = 0, aver_time_propag = 0;
-
+  // 体素滤波，降采样
   memset(point_selected_surf, true, sizeof(point_selected_surf));
   downSizeFilterSurf.setLeafSize(filter_size_surf_min, filter_size_surf_min, filter_size_surf_min);
   downSizeFilterMap.setLeafSize(filter_size_map_min, filter_size_map_min, filter_size_map_min);
-
+  // lidar 到 imu 的外参
   Lidar_T_wrt_IMU << VEC_FROM_ARRAY(extrinT);
   Lidar_R_wrt_IMU << MAT_FROM_ARRAY(extrinR);
-
+  
+  // 如果要估计外参，需要给ieskf对象设置初始外参
   if (extrinsic_est_en) {
     if (!use_imu_as_input) {
       kf_output.x_.offset_R_L_I = Lidar_R_wrt_IMU;
@@ -344,20 +346,31 @@ int main(int argc, char ** argv)
       kf_input.x_.offset_T_L_I = Lidar_T_wrt_IMU;
     }
   }
-
+   
   p_imu->lidar_type = p_pre->lidar_type = lidar_type;
   p_imu->imu_en = imu_en;
 
+  // 初始化 kf_input
   kf_input.init_dyn_share_modified_2h(get_f_input, df_dx_input, h_model_input);
+  
+  // 初始化 kf_output
+  // 分别为 f(x)、df/dx、h(x)、h_imu(x)
   kf_output.init_dyn_share_modified_3h(
     get_f_output, df_dx_output, h_model_output, h_model_IMU_output);
+  
+  // kf_input 的状态协方差矩阵初始化
   Eigen::Matrix<double, 24, 24> P_init;  // = MD(18, 18)::Identity() * 0.1;
   reset_cov(P_init);
   kf_input.change_P(P_init);
+
+  // kf_output 的状态协方差矩阵初始化
   Eigen::Matrix<double, 30, 30> P_init_output;  // = MD(24, 24)::Identity() * 0.01;
   reset_cov_output(P_init_output);
   kf_output.change_P(P_init_output);
+
+  // kf_input 的噪声协方差矩阵初始化
   Eigen::Matrix<double, 24, 24> Q_input = process_noise_cov_input();
+  // kf_output 的噪声协方差矩阵初始化
   Eigen::Matrix<double, 30, 30> Q_output = process_noise_cov_output();
   /*** debug record ***/
   FILE * fp;
@@ -365,6 +378,7 @@ int main(int argc, char ** argv)
   fp = fopen(pos_log_dir.c_str(), "w");
   open_file();
 
+  // 订阅雷达数据
   /*** ROS subscribe initialization ***/
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_pcl_pc;
   rclcpp::Subscription<livox_ros_driver2::msg::CustomMsg>::SharedPtr sub_pcl_livox;
@@ -377,8 +391,10 @@ int main(int argc, char ** argv)
       lid_topic, rclcpp::SensorDataQoS(),
       [](const sensor_msgs::msg::PointCloud2::SharedPtr msg) { standard_pcl_cbk(msg); });
   }
+  // imu 数据订阅
   auto sub_imu =
     nh->create_subscription<sensor_msgs::msg::Imu>(imu_topic, rclcpp::SensorDataQoS(), imu_cbk);
+  // 发布相关数据
   auto pub_laser_cloud_full_res =
     nh->create_publisher<sensor_msgs::msg::PointCloud2>("cloud_registered", 20);
   auto pub_laser_cloud_full_res_body =
@@ -389,19 +405,22 @@ int main(int argc, char ** argv)
   auto pub_odom_aft_mapped =
     nh->create_publisher<nav_msgs::msg::Odometry>("aft_mapped_to_init", 20);
   auto pub_path = nh->create_publisher<nav_msgs::msg::Path>("path", 20);
+  // tf 广播器，用于连接其他 ros 节点，补充 tf 位姿树
   auto tf_broadcaster = std::make_shared<tf2_ros::TransformBroadcaster>(nh);
 
-  //------------------------------------------------------------------------------------------------------
+  //--------------------------------------------------主线程-----------------------------------------------
   signal(SIGINT, SigHandle);
   rclcpp::Rate rate(500);
   while (rclcpp::ok()) {
     if (flg_exit) break;
     executor.spin_some();
+    // imu 与 雷达数据同步
     if (sync_packages(Measures)) {
       if (flg_reset) {
         RCLCPP_WARN(LOGGER, "reset when rosbag play back");
         p_imu->Reset();
         feats_undistort.reset(new PointCloudXYZI());
+        // input 和 output 选择
         if (use_imu_as_input) {
           // state_in = kf_input.get_x();
           state_in = state_input();
@@ -416,11 +435,13 @@ int main(int argc, char ** argv)
         flg_reset = false;
         init_map = false;
 
+        // ivox 地图初始化
         {
           ivox_.reset(new IVoxType(ivox_options_));
         }
       }
 
+      // 第一帧由于初始化
       if (flg_first_scan) {
         first_lidar_time = Measures.lidar_beg_time;
         flg_first_scan = false;
@@ -429,7 +450,9 @@ int main(int argc, char ** argv)
           printf("first imu time: %f\n", first_imu_time);
         }
         time_current = 0.0;
+        
         if (imu_en) {
+          // 重力对齐
           // imu_next = *(imu_deque.front());
           kf_input.x_.gravity << VEC_FROM_ARRAY(gravity);
           kf_output.x_.gravity << VEC_FROM_ARRAY(gravity);
@@ -437,6 +460,7 @@ int main(int argc, char ** argv)
           // kf_output.x_.acc *= -1;
 
           {
+            // imu数据时间戳大于第一帧lidar时间戳的数据，可以直接去掉
             while (Measures.lidar_beg_time >
                    get_time_sec(imu_next.header.stamp))  // if it is needed for the new map?
             {
@@ -470,8 +494,10 @@ int main(int argc, char ** argv)
 
       /*** downsample the feature points in a scan ***/
       t1 = omp_get_wtime();
+      // 处理输入 imu 数据，这里 fast-lio 会反向去畸变，但是 point-lio 不需要，仅仅留下了 imu 初始化
       p_imu->Process(Measures, feats_undistort);
       if (space_down_sample) {
+        // 降采样
         downSizeFilterSurf.setInputCloud(feats_undistort);
         downSizeFilterSurf.filter(*feats_down_body);
         sort(feats_down_body->points.begin(), feats_down_body->points.end(), time_list);
@@ -479,11 +505,13 @@ int main(int argc, char ** argv)
         feats_down_body = Measures.lidar;
         sort(feats_down_body->points.begin(), feats_down_body->points.end(), time_list);
       }
+
       {
         time_seq = time_compressing<int>(feats_down_body);
         feats_down_size = feats_down_body->points.size();
       }
 
+      // imu 初始化完后
       if (!p_imu->after_imu_init_)  // !p_imu->UseLIInit &&
       {
         if (!p_imu->imu_need_init_) {
@@ -497,6 +525,7 @@ int main(int argc, char ** argv)
           // V3D tmp_gravity << VEC_FROM_ARRAY(gravity_init);
           M3D rot_init;
           p_imu->Set_init(tmp_gravity, rot_init);
+          // 设置 input、output 的初始化旋转向量
           kf_input.x_.rot = rot_init;
           kf_output.x_.rot = rot_init;
           // kf_input.x_.rot; //.normalize();
@@ -507,17 +536,20 @@ int main(int argc, char ** argv)
         }
       }
       /*** initialize the map ***/
+      // 初始化地图
       if (!init_map) {
         feats_down_world->resize(feats_undistort->size());
+        // 点云去畸变
         for (int i = 0; i < feats_undistort->size(); i++) {
           {
             pointBodyToWorld(&(feats_undistort->points[i]), &(feats_down_world->points[i]));
           }
         }
+        // 保存初始化世界地图的三维点
         for (const auto & point : *feats_down_world) {
           init_feats_world->points.emplace_back(point);
         }
-
+        // 将点云添加到 ivox 地图中
         if (init_feats_world->size() >= init_map_size) {
           if (enable_prior_pcd) {
             auto map_cloud = loadPointcloudFromPcd(prior_pcd_map_path);
@@ -525,6 +557,7 @@ int main(int argc, char ** argv)
           } else {
             ivox_->AddPoints(init_feats_world->points);
           }
+          // 传播初始化地图
           publish_init_map(pub_laser_cloud_map);
           init_feats_world.reset(new PointCloudXYZI());
           init_map = true;

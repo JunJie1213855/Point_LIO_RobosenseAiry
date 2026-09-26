@@ -21,24 +21,33 @@ typedef MTK::S2<double, 98090, 10000, 1> S2;
 typedef MTK::vect<1, double> vect1;
 typedef MTK::vect<2, double> vect2;
 
+// 定义
+// 状态为 机体平移p_I_W、机体旋转 R_I_W 、雷达2imu旋转 R_L_I、雷达2imu平移p_L_I、机体速度 v、角速度 w、线性加速度 a、重力向量 g、角速度零偏 bg、加速度零偏 ba
 MTK_BUILD_MANIFOLD(
   state_input, ((vect3, pos))((SO3, rot))((SO3, offset_R_L_I))((vect3, offset_T_L_I))((vect3, vel))(
                  (vect3, bg))((vect3, ba))((vect3, gravity)));
 
+// 状态为 机体平移p_I_W、机体旋转 R_I_W 、雷达2imu旋转 R_L_I、雷达2imu平移p_L_I、机体速度 v、重力向量 g、角速度零偏 bg、加速度零偏 ba
 MTK_BUILD_MANIFOLD(
   state_output,
   ((vect3, pos))((SO3, rot))((SO3, offset_R_L_I))((vect3, offset_T_L_I))((vect3, vel))(
     (vect3, omg))((vect3, acc))((vect3, gravity))((vect3, bg))((vect3, ba)));
 
+// 输入：线性加速度 a、旋转角速度 w
 MTK_BUILD_MANIFOLD(input_ikfom, ((vect3, acc))((vect3, gyro)));
 
+// 噪声输入：角速度噪声 ng、加速度噪声na、角速度零偏游走 nbg、加速度零偏游走 nba
 MTK_BUILD_MANIFOLD(process_noise_input, ((vect3, ng))((vect3, na))((vect3, nbg))((vect3, nba)));
 
+// 噪声输出：
 MTK_BUILD_MANIFOLD(
   process_noise_output, ((vect3, vel))((vect3, ng))((vect3, na))((vect3, nbg))((vect3, nba)));
 
+// 状态为 机体平移p_I_W、机体旋转 R_I_W 、雷达2imu旋转 R_L_I、雷达2imu平移p_L_I、机体速度 v、重力向量 g、角速度零偏 bg、加速度零偏 ba
 extern esekfom::esekf<state_input, 24, input_ikfom> kf_input;
-extern esekfom::esekf<state_output, 30, input_ikfom> kf_output;
+
+// 状态为 机体平移p_I_W、机体旋转 R_I_W 、雷达2imu旋转 R_L_I、雷达2imu平移p_L_I、机体速度 v、角速度 w、线性加速度 a、重力向量 g、角速度零偏 bg、加速度零偏 ba
+extern esekfom::esekf<state_output, 30, input_ikfom> kf_output; // 常使用这个
 
 #define PBWIDTH 30
 #define PBSTR "||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||"
@@ -138,7 +147,7 @@ std::vector<int> time_compressing(const PointCloudXYZI::Ptr & point_cloud)
   return time_seq;
 }
 
-/* comment
+/* 平面单位法向量估计： x0 = [A/D, B/D, C/D]
 plane equation: Ax + By + Cz + D = 0
 convert to: A/D*x + B/D*y + C/D*z = -1
 solve: A0*x0 = b0
@@ -173,6 +182,9 @@ bool esti_normvector(
   return true;
 }
 
+// 平面估计另一种形式
+// 法向量模：|n| = (A^2 + B^2 + C^2)^{1/2}
+// 输出：x0 = [ A, B, C, D] / |n| 
 template <typename T>
 bool esti_plane(Matrix<T, 4, 1> & pca_result, const PointVector & point, const T & threshold)
 {

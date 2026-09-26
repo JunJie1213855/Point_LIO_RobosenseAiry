@@ -50,12 +50,17 @@ Eigen::Matrix<double, 30, 30> df_dx_output(state_output &s, const input_ikfom &i
 
 // Eigen::Matrix<double, 30, 15> df_dw_output(state_output &s);
 
+// 雷达观测方程输出
 void h_model_input(state_input &s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R, esekfom::dyn_share_modified<double> &ekfom_data);
 
 void h_model_output(state_output &s, Eigen::Matrix3d cov_p, Eigen::Matrix3d cov_R, esekfom::dyn_share_modified<double> &ekfom_data);
 
+// 以角速度、加速度作为状态时的观测方程输出
 void h_model_IMU_output(state_output &s, esekfom::dyn_share_modified<double> &ekfom_data);
 
+
+// 点云去畸变，用到的变量包括
+// Lidar_T_wrt_IMU、Lidar_R_wrt_IMU、
 void pointBodyToWorld(PointType const * const pi, PointType * const po);
 
 #endif
