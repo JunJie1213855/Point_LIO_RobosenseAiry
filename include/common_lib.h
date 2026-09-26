@@ -121,6 +121,41 @@ T calc_dist(Eigen::Vector3d p1, PointType p2)
   return d;
 }
 
+// 统计点云中具有相同时间戳（curvature 字段）的连续点数量，并将这些点数压缩为频数序列（Run-Length Counting）。
+/**
+ * @brief 根据起始时间戳和 time_seq 按时间批次处理点云（用于 IMU 运动畸变矫正/姿态插值）
+ * 
+ * ===================================== 【示例数据与注释说明】 =====================================
+ * 
+ * 1. 输入示例点云 `point_cloud` (包含 6 个点，按 curvature 时间戳升序排列)：
+ *    -----------------------------------------------------------------------------------------
+ *    点索引 (i)  |  pt[0]   |  pt[1]   |  pt[2]   |  pt[3]   |  pt[4]   |  pt[5]
+ *    相对时间(ms)|   0.0    |   0.0    |   0.0    |   2.5    |   2.5    |   5.0  (存储于 curvature)
+ *    -----------------------------------------------------------------------------------------
+ * 
+ * 2. 输入示例时间序列 `time_seq` (由 time_compressing 函数生成)：
+ *    time_seq = {3, 2, 1};
+ *    - 元素 3: 表示第 1 批包含 3 个点 (pt[0], pt[1], pt[2])，相对时间均相同 (0.0 ms)
+ *    - 元素 2: 表示第 2 批包含 2 个点 (pt[3], pt[4])，      相对时间均相同 (2.5 ms)
+ *    - 元素 1: 表示第 3 批包含 1 个点 (pt[5])，            相对时间为 (5.0 ms)
+ * 
+ * 3. 输入示例基准时间戳 `start_timestamp`:
+ *    start_timestamp = 1690000000.100000 秒 (s)
+ * 
+ * 4. 算法批处理计算推导过程:
+ *    - Batch 0: 读取 pt[0].curvature = 0.0 ms -> absolute_timestamp = 1690000000.100000 + 0.000 = 1690000000.100000 s
+ *               循环处理 pt[0] ~ pt[2] 共 3 个点
+ *    - Batch 1: 读取 pt[3].curvature = 2.5 ms -> absolute_timestamp = 1690000000.100000 + 0.0025 = 1690000000.102500 s
+ *               循环处理 pt[3] ~ pt[4] 共 2 个点
+ *    - Batch 2: 读取 pt[5].curvature = 5.0 ms -> absolute_timestamp = 1690000000.100000 + 0.005 = 1690000000.105000 s
+ *               循环处理 pt[5] 共 1 个点
+ * 
+ * =================================================================================================
+ * 
+ * @param[in] start_timestamp 雷达帧起始绝对时间戳（单位：秒 s）
+ * @param[in] time_seq        每组相同时间戳的点数序列 (例如: {3, 2, 1})
+ * @param[in,out] point_cloud 待处理点云的指针
+ */
 template <typename T>
 std::vector<int> time_compressing(const PointCloudXYZI::Ptr & point_cloud)
 {
@@ -128,19 +163,15 @@ std::vector<int> time_compressing(const PointCloudXYZI::Ptr & point_cloud)
   int j = 0;
   std::vector<int> time_seq;
   // time_seq.clear();
-  time_seq.reserve(points_size);
+  time_seq.reserve(points_size); // 预留空间
   for (int i = 0; i < points_size - 1; i++) {
     j++;
+    // 分界线判断：后一个的时间戳大于当前时间戳时，就是分界点，此时保存数量和重置
     if (point_cloud->points[i + 1].curvature > point_cloud->points[i].curvature) {
       time_seq.emplace_back(j);
       j = 0;
     }
   }
-  //   if (j == 0)
-  //   {
-  //     time_seq.emplace_back(1);
-  //   }
-  //   else
   {
     time_seq.emplace_back(j + 1);
   }

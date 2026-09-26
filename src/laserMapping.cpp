@@ -507,6 +507,7 @@ int main(int argc, char ** argv)
       }
 
       {
+        // 时间戳统计直方图
         time_seq = time_compressing<int>(feats_down_body);
         feats_down_size = feats_down_body->points.size();
       }
@@ -525,7 +526,7 @@ int main(int argc, char ** argv)
           // V3D tmp_gravity << VEC_FROM_ARRAY(gravity_init);
           M3D rot_init;
           p_imu->Set_init(tmp_gravity, rot_init);
-          // 设置 input、output 的初始化旋转向量
+          // 设置 input、output 的初始化旋转向量，注意这里由于是第一帧点云，所以设置为参考帧，参考帧的平移为 0, 设置旋转是为了重力对齐
           kf_input.x_.rot = rot_init;
           kf_output.x_.rot = rot_init;
           // kf_input.x_.rot; //.normalize();
@@ -535,11 +536,12 @@ int main(int argc, char ** argv)
           continue;
         }
       }
+
       /*** initialize the map ***/
-      // 初始化地图
+      // 初始化地图，经过 imu 的重力对齐初始化，旋转为 R，平移为 0, 所以初始化的数据就是参考帧数据
       if (!init_map) {
         feats_down_world->resize(feats_undistort->size());
-        // 点云去畸变
+        // 点云去畸变，旋转为 rot_init（就在上面的代码），平移为 0 
         for (int i = 0; i < feats_undistort->size(); i++) {
           {
             pointBodyToWorld(&(feats_undistort->points[i]), &(feats_down_world->points[i]));
@@ -580,22 +582,17 @@ int main(int argc, char ** argv)
       pbody_list.reserve(feats_down_size);
       // pbody_ext_list.reserve(feats_down_size);
 
+      // 开始逐点更新参考坐标系
       for (size_t i = 0; i < feats_down_body->size(); i++) {
+        // 记录当前点
         V3D point_this(
-          feats_down_body->points[i].x, feats_down_body->points[i].y, feats_down_body->points[i].z);
+          feats_down_body->points[i].x,  // x
+          feats_down_body->points[i].y,  // y
+          feats_down_body->points[i].z   // z
+        );
         pbody_list[i] = point_this;
+        // 如果不用估计外参，直接先把点云参考坐标系从 Lidar 转为 IMU
         if (!extrinsic_est_en)
-        // {
-        //     if (!use_imu_as_input)
-        //     {
-        //         point_this = kf_output.x_.offset_R_L_I * point_this + kf_output.x_.offset_T_L_I;
-        //     }
-        //     else
-        //     {
-        //         point_this = kf_input.x_.offset_R_L_I * point_this + kf_input.x_.offset_T_L_I;
-        //     }
-        // }
-        // else
         {
           point_this = Lidar_R_wrt_IMU * point_this + Lidar_T_wrt_IMU;
           M3D point_crossmat;
@@ -603,6 +600,8 @@ int main(int argc, char ** argv)
           crossmat_list[i] = point_crossmat;
         }
       }
+
+      // 
       if (!use_imu_as_input) {
         bool imu_upda_cov = false;
         effct_feat_num = 0;
@@ -610,19 +609,23 @@ int main(int argc, char ** argv)
         if (!time_seq.empty()) {
           double pcl_beg_time = Measures.lidar_beg_time;
           idx = -1;
+          // 按照时间直方图进行更新
           for (k = 0; k < time_seq.size(); k++) {
+            // 计算当前第 k 批次的最后一个三维点的绝对时间戳 time_current
             PointType & point_body = feats_down_body->points[idx + time_seq[k]];
-
             time_current = point_body.curvature / 1000.0 + pcl_beg_time;
 
+            // 如果是第一帧，取出第一帧最开始时间戳之前的 IMU 测量记录
             if (is_first_frame) {
               if (imu_en) {
+                // 小于最开始时间戳 time_current 的 IMU 测量都要被弹出
                 while (time_current > get_time_sec(imu_next.header.stamp)) {
                   imu_deque.pop_front();
                   if (imu_deque.empty()) break;
                   imu_last = imu_next;
                   imu_next = *(imu_deque.front());
                 }
+                // 记录 IMU 的最新测量数据
                 angvel_avr << imu_last.angular_velocity.x, imu_last.angular_velocity.y,
                   imu_last.angular_velocity.z;
                 acc_avr << imu_last.linear_acceleration.x, imu_last.linear_acceleration.y,
@@ -634,11 +637,16 @@ int main(int argc, char ** argv)
               time_predict_last_const = time_current;
             }
             if (imu_en && !imu_deque.empty()) {
+              // 查看当前的 IMU 数据是否等于修正后的 IMU 数据队列最早的时间戳
               bool last_imu = get_time_sec(imu_next.header.stamp) ==
                               get_time_sec(imu_deque.front()->header.stamp);
-              while (get_time_sec(imu_next.header.stamp) < time_predict_last_const &&
-                     !imu_deque.empty()) {
-                if (!last_imu) {
+              //  IMU 小于当前点的时间戳，前向传播数据
+              while (
+                get_time_sec(imu_next.header.stamp) < time_predict_last_const &&
+                !imu_deque.empty()
+              ) 
+              {
+                if (!last_imu) { 如果不是当前
                   imu_last = imu_next;
                   imu_next = *(imu_deque.front());
                   break;
@@ -649,47 +657,59 @@ int main(int argc, char ** argv)
                   imu_next = *(imu_deque.front());
                 }
               }
+              // ... 检查 imu_next 的时间戳 ...
               bool imu_comes = time_current > get_time_sec(imu_next.header.stamp);
-              while (imu_comes) {
+              // 这里只更新上一个状态的时间戳 imu_next.header.stamp 到当前三维点的时间戳 time_current 内的 IMU 测量
+              while (imu_comes) 
+              {
                 imu_upda_cov = true;
+                // 1. 提取 IMU 观测值 (角速度/加速度)
                 angvel_avr << imu_next.angular_velocity.x, imu_next.angular_velocity.y,
                   imu_next.angular_velocity.z;
                 acc_avr << imu_next.linear_acceleration.x, imu_next.linear_acceleration.y,
                   imu_next.linear_acceleration.z;
 
-                /*** covariance update ***/
+                // 2. 状态向前传播 (Predict state)
                 double dt = get_time_sec(imu_next.header.stamp) - time_predict_last_const;
+                // 状态前向传播
                 kf_output.predict(dt, Q_output, input_in, true, false);
                 time_predict_last_const = get_time_sec(imu_next.header.stamp);  // big problem
 
                 {
-                  double dt_cov = get_time_sec(imu_next.header.stamp) - time_update_last;
 
+                  // 3. 协方差传播与 IMU 观测更新 (Covariance & IMU Measurement Update)
+                  double dt_cov = get_time_sec(imu_next.header.stamp) - time_update_last;
                   if (dt_cov > 0.0) {
                     time_update_last = get_time_sec(imu_next.header.stamp);
                     double propag_imu_start = omp_get_wtime();
 
+                    // 协方差前向传播
                     kf_output.predict(dt_cov, Q_output, input_in, false, true);
 
                     propag_time += omp_get_wtime() - propag_imu_start;
                     double solve_imu_start = omp_get_wtime();
+                    // 注入 IMU 残差更新 EKF
                     kf_output.update_iterated_dyn_share_IMU();
                     solve_time += omp_get_wtime() - solve_imu_start;
                   }
                 }
+                // 弹出已使用的 IMU 帧
                 imu_deque.pop_front();
-                if (imu_deque.empty()) break;
+                if (imu_deque.empty()) 
+                  break;
                 imu_last = imu_next;
                 imu_next = *(imu_deque.front());
                 imu_comes = time_current > get_time_sec(imu_next.header.stamp);
               }
             }
+
             if (flg_reset) {
               break;
             }
-
+            // 补足从最后一个 IMU 时间戳到当前雷达批次时间戳 dt 的状态预测
             double dt = time_current - time_predict_last_const;
             double propag_state_start = omp_get_wtime();
+            // 协方差前向传播
             if (!prop_at_freq_of_imu) {
               double dt_cov = time_current - time_update_last;
               if (dt_cov > 0.0) {
@@ -697,6 +717,7 @@ int main(int argc, char ** argv)
                 time_update_last = time_current;
               }
             }
+            // 状态前向传播
             kf_output.predict(dt, Q_output, input_in, true, false);
             propag_time += omp_get_wtime() - propag_state_start;
             time_predict_last_const = time_current;
@@ -707,12 +728,15 @@ int main(int argc, char ** argv)
               idx += time_seq[k];
               continue;
             }
+            // 利用当前批次的点云特征做地图匹配（点到面/点到线残差），进行 EKF 迭代更新
+            // update_iterated_dyn_share_modified 内部会进行平面法向量躯体，当前三维点去畸变，观测更新
             if (!kf_output.update_iterated_dyn_share_modified()) {
               idx = idx + time_seq[k];
               continue;
             }
             solve_start = omp_get_wtime();
 
+            // 发布相关数据
             if (publish_odometry_without_downsample) {
               /******* Publish odometry *******/
 

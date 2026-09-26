@@ -144,11 +144,13 @@ public:
   void predict(
     double & dt, processnoisecovariance & Q, const input & i_in, bool predict_state, bool prop_cov)
   {
+    // 状态前向传播，仅仅一个流形上的加法即可
     if (predict_state) {
       flatted_state f_ = f(x_, i_in);
       x_.oplus(f_, dt);
     }
 
+    // 协方差前向传播
     if (prop_cov) {
       flatted_state f_ = f(x_, i_in);
       // state x_before = x_;
@@ -189,6 +191,8 @@ public:
       }
 
       F_x1 += f_x_final * dt;
+
+      // Fx P Fx^T + Q (dt)^2
       P_ = F_x1 * P_ * (F_x1).transpose() + Q * (dt * dt);
     }
   }
@@ -201,6 +205,7 @@ public:
     double m_noise;
     for (int i = 0; i < maximum_iter; i++) {
       dyn_share.valid = true;
+      // 调用第一个观测更新函数
       h_dyn_share_modified_1(
         x_, P_.template block<3, 3>(0, 0), P_.template block<3, 3>(3, 3), dyn_share);
       if (!dyn_share.valid) {
@@ -219,6 +224,7 @@ public:
       // dx_new = dx;
       // P_ = P_propagated;
 
+      // 更新（修正）协方差
       Matrix<scalar_type, n, Eigen::Dynamic> PHT;
       Matrix<scalar_type, Eigen::Dynamic, Eigen::Dynamic> HPHT;
       Matrix<scalar_type, n, Eigen::Dynamic> K_;
@@ -239,7 +245,7 @@ public:
       Matrix<scalar_type, n, 1> dx_ =
         K_ * z;  // - h) + (K_x - Matrix<scalar_type, n, n>::Identity()) * dx_new;
       // state x_before = x_;
-
+      // 修正状态
       x_.boxplus(dx_);
       {
         P_ = P_ - K_ * h_x * P_.template block<12, n>(0, 0);
@@ -253,6 +259,7 @@ public:
     dyn_share_modified<scalar_type> dyn_share;
     for (int i = 0; i < maximum_iter; i++) {
       dyn_share.valid = true;
+      // IMU 的观测更新
       h_dyn_share_modified_2(x_, dyn_share);
 
       Matrix<scalar_type, 6, 1> z = dyn_share.z_IMU;
