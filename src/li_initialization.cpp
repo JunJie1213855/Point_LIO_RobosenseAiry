@@ -235,52 +235,6 @@ void imu_cbk(const sensor_msgs::msg::Imu::ConstSharedPtr &msg_in)
 bool sync_packages(MeasureGroup &meas)
 {
   {
-    if (!imu_en)
-    { // 不适用 imu 数据，仅仅用 lidar 数据做对齐 =》 这里 point-lio 不会用，应该直接删除代码
-      if (!lidar_buffer.empty())
-      {
-        if (!lidar_pushed)
-        {
-          meas.lidar = lidar_buffer.front();
-          meas.lidar_beg_time = time_buffer.front(); // 记录雷达的开始时间
-          lose_lid = false;
-          if (meas.lidar->points.empty())
-          {
-            std::cout << "lose lidar" << '\n';
-            // return false;
-            lose_lid = true;
-          }
-          else
-          {
-            double end_time = meas.lidar->points.back().curvature; // 记录雷达内部的结束时间
-            for (auto pt : meas.lidar->points)
-            {
-              if (pt.curvature > end_time) // 防止内部时间未排序，通过记录最大值时间戳更新结束时间
-              {
-                end_time = pt.curvature;
-              }
-            }
-            lidar_end_time = meas.lidar_beg_time + end_time / double(1000); // 将 lidar 内部时间戳进行转换
-            meas.lidar_last_time = lidar_end_time;
-          }
-          lidar_pushed = true;
-        }
-
-        time_buffer.pop_front();
-        lidar_buffer.pop_front();
-        lidar_pushed = false;
-        if (!lose_lid)
-        {
-          return true;
-        }
-        else
-        {
-          return false;
-        }
-      }
-      return false;
-    }
-
     // 需要采用 imu 数据
     // 检测 lidar 数据和 imu 数据是否都存在
     if (lidar_buffer.empty() || imu_deque.empty())

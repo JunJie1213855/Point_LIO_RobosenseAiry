@@ -71,46 +71,23 @@ PointCloudXYZI::Ptr loadPointcloudFromPcd(const std::string &file_path)
 
 inline void dump_lio_state_to_log(FILE *fp)
 {
-  V3D rot_ang;
-  if (!use_imu_as_input)
-  {
-    rot_ang = SO3ToEuler(kf_output.x_.rot);
-  }
-  else
-  {
-    rot_ang = SO3ToEuler(kf_input.x_.rot);
-  }
+  V3D rot_ang = SO3ToEuler(kf_output.x_.rot);
 
   fprintf(fp, "%lf ", Measures.lidar_beg_time - first_lidar_time);
   fprintf(fp, "%lf %lf %lf ", rot_ang(0), rot_ang(1), rot_ang(2)); // Angle
-  if (use_imu_as_input)
-  {
-    fprintf(fp, "%lf %lf %lf ", kf_input.x_.pos(0), kf_input.x_.pos(1), kf_input.x_.pos(2)); // Pos
-    fprintf(fp, "%lf %lf %lf ", 0.0, 0.0, 0.0);                                              // omega
-    fprintf(fp, "%lf %lf %lf ", kf_input.x_.vel(0), kf_input.x_.vel(1), kf_input.x_.vel(2)); // Vel
-    fprintf(fp, "%lf %lf %lf ", 0.0, 0.0, 0.0);                                              // Acc
-    fprintf(fp, "%lf %lf %lf ", kf_input.x_.bg(0), kf_input.x_.bg(1), kf_input.x_.bg(2));    // Bias_g
-    fprintf(fp, "%lf %lf %lf ", kf_input.x_.ba(0), kf_input.x_.ba(1), kf_input.x_.ba(2));    // Bias_a
-    fprintf(
-        fp, "%lf %lf %lf ", kf_input.x_.gravity(0), kf_input.x_.gravity(1),
-        kf_input.x_.gravity(2)); // Bias_a
-  }
-  else
-  {
-    fprintf(
-        fp, "%lf %lf %lf ", kf_output.x_.pos(0), kf_output.x_.pos(1), kf_output.x_.pos(2)); // Pos
-    fprintf(fp, "%lf %lf %lf ", 0.0, 0.0, 0.0);                                             // omega
-    fprintf(
-        fp, "%lf %lf %lf ", kf_output.x_.vel(0), kf_output.x_.vel(1), kf_output.x_.vel(2)); // Vel
-    fprintf(fp, "%lf %lf %lf ", 0.0, 0.0, 0.0);                                             // Acc
-    fprintf(
-        fp, "%lf %lf %lf ", kf_output.x_.bg(0), kf_output.x_.bg(1), kf_output.x_.bg(2)); // Bias_g
-    fprintf(
-        fp, "%lf %lf %lf ", kf_output.x_.ba(0), kf_output.x_.ba(1), kf_output.x_.ba(2)); // Bias_a
-    fprintf(
-        fp, "%lf %lf %lf ", kf_output.x_.gravity(0), kf_output.x_.gravity(1),
-        kf_output.x_.gravity(2)); // Bias_a
-  }
+  fprintf(
+      fp, "%lf %lf %lf ", kf_output.x_.pos(0), kf_output.x_.pos(1), kf_output.x_.pos(2)); // Pos
+  fprintf(fp, "%lf %lf %lf ", 0.0, 0.0, 0.0);                                             // omega
+  fprintf(
+      fp, "%lf %lf %lf ", kf_output.x_.vel(0), kf_output.x_.vel(1), kf_output.x_.vel(2)); // Vel
+  fprintf(fp, "%lf %lf %lf ", 0.0, 0.0, 0.0);                                             // Acc
+  fprintf(
+      fp, "%lf %lf %lf ", kf_output.x_.bg(0), kf_output.x_.bg(1), kf_output.x_.bg(2)); // Bias_g
+  fprintf(
+      fp, "%lf %lf %lf ", kf_output.x_.ba(0), kf_output.x_.ba(1), kf_output.x_.ba(2)); // Bias_a
+  fprintf(
+      fp, "%lf %lf %lf ", kf_output.x_.gravity(0), kf_output.x_.gravity(1),
+      kf_output.x_.gravity(2)); // Bias_a
   fprintf(fp, "\r\n");
   fflush(fp);
 }
@@ -121,14 +98,7 @@ void pointBodyLidarToIMU(PointType const *const pi, PointType *const po)
   V3D p_body_imu;
   if (extrinsic_est_en)
   {
-    if (!use_imu_as_input)
-    {
-      p_body_imu = kf_output.x_.offset_R_L_I * p_body_lidar + kf_output.x_.offset_T_L_I;
-    }
-    else
-    {
-      p_body_imu = kf_input.x_.offset_R_L_I * p_body_lidar + kf_input.x_.offset_T_L_I;
-    }
+    p_body_imu = kf_output.x_.offset_R_L_I * p_body_lidar + kf_output.x_.offset_T_L_I;
   }
   else
   {
@@ -271,25 +241,18 @@ void set_posestamp(T &out)
     out.orientation.w = q.coeffs()[3];
   };
 
-  if (!use_imu_as_input)
+  if (enable_prior_pcd && is_first_kf)
   {
-    if (enable_prior_pcd && is_first_kf)
-    {
-      // Execute only on the first call
-      kf_output.x_.pos(0) = init_pose[0];
-      kf_output.x_.pos(1) = init_pose[1];
-      kf_output.x_.pos(2) = init_pose[2];
-      set_output_from_kf(kf_output);
-      is_first_kf = false; // Set is_first_kf to false after the first call
-    }
-    else
-    {
-      set_output_from_kf(kf_output);
-    }
+    // Execute only on the first call
+    kf_output.x_.pos(0) = init_pose[0];
+    kf_output.x_.pos(1) = init_pose[1];
+    kf_output.x_.pos(2) = init_pose[2];
+    set_output_from_kf(kf_output);
+    is_first_kf = false; // Set is_first_kf to false after the first call
   }
   else
   {
-    set_output_from_kf(kf_input);
+    set_output_from_kf(kf_output);
   }
 }
 
@@ -374,41 +337,22 @@ int main(int argc, char **argv)
   // 如果要估计外参，需要给ieskf对象设置初始外参
   if (extrinsic_est_en)
   {
-    if (!use_imu_as_input)
-    {
-      kf_output.x_.offset_R_L_I = Lidar_R_wrt_IMU;
-      kf_output.x_.offset_T_L_I = Lidar_T_wrt_IMU;
-    }
-    else
-    {
-      kf_input.x_.offset_R_L_I = Lidar_R_wrt_IMU;
-      kf_input.x_.offset_T_L_I = Lidar_T_wrt_IMU;
-    }
+    kf_output.x_.offset_R_L_I = Lidar_R_wrt_IMU;
+    kf_output.x_.offset_T_L_I = Lidar_T_wrt_IMU;
   }
 
   p_imu->lidar_type = p_pre->lidar_type = lidar_type;
-  p_imu->imu_en = imu_en;
-
-  // 初始化 kf_input
-  kf_input.init_dyn_share_modified_2h(get_f_input, df_dx_input, h_model_input);
 
   // 初始化 kf_output
   // 分别为 f(x)、df/dx、h(x)、h_imu(x)
   kf_output.init_dyn_share_modified_3h(
       get_f_output, df_dx_output, h_model_output, h_model_IMU_output);
 
-  // kf_input 的状态协方差矩阵初始化
-  Eigen::Matrix<double, 24, 24> P_init; // = MD(18, 18)::Identity() * 0.1;
-  reset_cov(P_init);
-  kf_input.change_P(P_init);
-
   // kf_output 的状态协方差矩阵初始化
   Eigen::Matrix<double, 30, 30> P_init_output; // = MD(24, 24)::Identity() * 0.01;
   reset_cov_output(P_init_output);
   kf_output.change_P(P_init_output);
 
-  // kf_input 的噪声协方差矩阵初始化
-  Eigen::Matrix<double, 24, 24> Q_input = process_noise_cov_input();
   // kf_output 的噪声协方差矩阵初始化
   Eigen::Matrix<double, 30, 30> Q_output = process_noise_cov_output();
   /*** debug record ***/
@@ -469,19 +413,9 @@ int main(int argc, char **argv)
         RCLCPP_WARN(LOGGER, "reset when rosbag play back");
         p_imu->Reset();
         feats_undistort.reset(new PointCloudXYZI());
-        // input 和 output 选择
-        if (use_imu_as_input)
-        {
-          // state_in = kf_input.get_x();
-          state_in = state_input();
-          kf_input.change_P(P_init);
-        }
-        else
-        {
-          // state_out = kf_output.get_x();
-          state_out = state_output();
-          kf_output.change_P(P_init_output);
-        }
+        // 重置 kf_output 状态与协方差
+        state_out = state_output();
+        kf_output.change_P(P_init_output);
         flg_first_scan = true;
         is_first_frame = true;
         flg_reset = false;
@@ -505,10 +439,9 @@ int main(int argc, char **argv)
         }
         time_current = 0.0;
 
-        if (imu_en) // 使用 imu 时，要清除 imu 中不要的数据
+        // 使用 imu 时，要清除 imu 中不要的数据
         {
           // 重力对齐的参考重力向量
-          kf_input.x_.gravity << VEC_FROM_ARRAY(gravity);
           kf_output.x_.gravity << VEC_FROM_ARRAY(gravity);
           {
             // 当前 imu 数据中，其时间戳小于第一帧lidar时间戳的数据，可以直接去掉
@@ -526,15 +459,6 @@ int main(int argc, char **argv)
               // imu_deque.pop();
             }
           }
-        }
-        else  // 不适用 imu，无需对 imu 进行处理
-        {
-          kf_input.x_.gravity << VEC_FROM_ARRAY(gravity);  // _init);
-          kf_output.x_.gravity << VEC_FROM_ARRAY(gravity); //_init);
-          kf_output.x_.acc << VEC_FROM_ARRAY(gravity);     //_init);
-          kf_output.x_.acc *= -1;
-          p_imu->imu_need_init_ = false;
-          // p_imu->after_imu_init_ = true;
         }
         G_m_s2 =
             std::sqrt(gravity[0] * gravity[0] + gravity[1] * gravity[1] + gravity[2] * gravity[2]);
@@ -577,24 +501,13 @@ int main(int argc, char **argv)
       {
         if (!p_imu->imu_need_init_) // 如果 imu 需要初始化
         {
-          V3D tmp_gravity;
+          V3D tmp_gravity = -p_imu->mean_acc / p_imu->mean_acc.norm() * G_m_s2;
 
-          // 
-          if (imu_en) 
-          {
-            tmp_gravity = -p_imu->mean_acc / p_imu->mean_acc.norm() * G_m_s2;
-          }
-          else
-          {
-            tmp_gravity << VEC_FROM_ARRAY(gravity_init);
-            p_imu->after_imu_init_ = true;
-          }
           // 设置重力初始化， rot_init 就是重力对齐后的初始化朝向
           M3D rot_init;
-          p_imu->Set_init(tmp_gravity, rot_init); 
-          // 设置 input、output 的初始化旋转向量，注意这里由于是第一帧点云，所以设置为参考帧
+          p_imu->Set_init(tmp_gravity, rot_init);
+          // 设置 output 的初始化旋转向量，注意这里由于是第一帧点云，所以设置为参考帧
           // 参考帧的平移为 0, 所以没有设置平移，
-          kf_input.x_.rot = rot_init;
           kf_output.x_.rot = rot_init;
           // 修正初始化后的加速度
           kf_output.x_.acc = -rot_init.transpose() * kf_output.x_.gravity;
@@ -685,7 +598,6 @@ int main(int argc, char **argv)
       }
 
       // 
-      if (!use_imu_as_input) // 主要处理
       {
         bool imu_upda_cov = false;
         effct_feat_num = 0;
@@ -704,30 +616,27 @@ int main(int argc, char **argv)
             // 如果是第一帧，取出第一帧最开始时间戳之前的 IMU 测量记录
             if (is_first_frame)
             {
-              if (imu_en)
+              // 小于最开始时间戳 time_current 的 IMU 测量都要被弹出
+              while (time_current > get_time_sec(imu_next.header.stamp))
               {
-                // 小于最开始时间戳 time_current 的 IMU 测量都要被弹出
-                while (time_current > get_time_sec(imu_next.header.stamp))
-                {
-                  imu_deque.pop_front();
-                  if (imu_deque.empty())
-                    break;
-                  imu_last = imu_next;
-                  imu_next = *(imu_deque.front());
-                }
-                // 记录 IMU 的最新测量数据
-                angvel_avr << imu_last.angular_velocity.x, imu_last.angular_velocity.y,
-                    imu_last.angular_velocity.z;
-                acc_avr << imu_last.linear_acceleration.x, imu_last.linear_acceleration.y,
-                    imu_last.linear_acceleration.z;
+                imu_deque.pop_front();
+                if (imu_deque.empty())
+                  break;
+                imu_last = imu_next;
+                imu_next = *(imu_deque.front());
               }
+              // 记录 IMU 的最新测量数据
+              angvel_avr << imu_last.angular_velocity.x, imu_last.angular_velocity.y,
+                  imu_last.angular_velocity.z;
+              acc_avr << imu_last.linear_acceleration.x, imu_last.linear_acceleration.y,
+                  imu_last.linear_acceleration.z;
               is_first_frame = false;
               imu_upda_cov = true;
               time_update_last = time_current;
               time_predict_last_const = time_current;
             }
             // 如果使用 imu 数据，且 imu 数据不为空
-            if (imu_en && !imu_deque.empty())
+            if (!imu_deque.empty())
             {
               // 查看当前的 IMU 数据是否等于修正后的 IMU 数据队列最早的时间戳
               bool last_imu = get_time_sec(imu_next.header.stamp) ==
@@ -954,213 +863,6 @@ int main(int argc, char **argv)
           }
         }
       }
-      else
-      {
-        bool imu_prop_cov = false;
-        effct_feat_num = 0;
-        if (!time_seq.empty())
-        {
-          double pcl_beg_time = Measures.lidar_beg_time;
-          idx = -1;
-          for (k = 0; k < time_seq.size(); k++)
-          {
-            PointType &point_body = feats_down_body->points[idx + time_seq[k]];
-            time_current = point_body.curvature / 1000.0 + pcl_beg_time;
-            if (is_first_frame)
-            {
-              while (time_current > get_time_sec(imu_next.header.stamp))
-              {
-                imu_deque.pop_front();
-                if (imu_deque.empty())
-                  break;
-                imu_last = imu_next;
-                imu_next = *(imu_deque.front());
-              }
-              imu_prop_cov = true;
-
-              is_first_frame = false;
-              t_last = time_current;
-              time_update_last = time_current;
-              {
-                input_in.gyro << imu_last.angular_velocity.x, imu_last.angular_velocity.y,
-                    imu_last.angular_velocity.z;
-                input_in.acc << imu_last.linear_acceleration.x, imu_last.linear_acceleration.y,
-                    imu_last.linear_acceleration.z;
-                input_in.acc = input_in.acc * G_m_s2 / acc_norm;
-              }
-            }
-
-            while (time_current > get_time_sec(imu_next.header.stamp)) // && !imu_deque.empty())
-            {
-              imu_deque.pop_front();
-
-              input_in.gyro << imu_last.angular_velocity.x, imu_last.angular_velocity.y,
-                  imu_last.angular_velocity.z;
-              input_in.acc << imu_last.linear_acceleration.x, imu_last.linear_acceleration.y,
-                  imu_last.linear_acceleration.z;
-              input_in.acc = input_in.acc * G_m_s2 / acc_norm;
-              double dt = get_time_sec(imu_last.header.stamp) - t_last;
-
-              double dt_cov = get_time_sec(imu_last.header.stamp) - time_update_last;
-              if (dt_cov > 0.0)
-              {
-                kf_input.predict(dt_cov, Q_input, input_in, false, true);
-                time_update_last = get_time_sec(imu_last.header.stamp); // time_current;
-              }
-              kf_input.predict(dt, Q_input, input_in, true, false);
-              t_last = get_time_sec(imu_last.header.stamp);
-              imu_prop_cov = true;
-
-              if (imu_deque.empty())
-                break;
-              imu_last = imu_next;
-              imu_next = *(imu_deque.front());
-              // imu_upda_cov = true;
-            }
-            if (flg_reset)
-            {
-              break;
-            }
-            double dt = time_current - t_last;
-            t_last = time_current;
-            double propag_start = omp_get_wtime();
-
-            if (!prop_at_freq_of_imu)
-            {
-              double dt_cov = time_current - time_update_last;
-              if (dt_cov > 0.0)
-              {
-                kf_input.predict(dt_cov, Q_input, input_in, false, true);
-                time_update_last = time_current;
-              }
-            }
-            kf_input.predict(dt, Q_input, input_in, true, false);
-
-            propag_time += omp_get_wtime() - propag_start;
-
-            double t_update_start = omp_get_wtime();
-
-            if (feats_down_size < 1)
-            {
-              RCLCPP_WARN(LOGGER, "No point, skip this scan!\n");
-
-              idx += time_seq[k];
-              continue;
-            }
-            if (!kf_input.update_iterated_dyn_share_modified())
-            {
-              idx = idx + time_seq[k];
-              continue;
-            }
-
-            solve_start = omp_get_wtime();
-
-            if (publish_odometry_without_downsample)
-            {
-              /******* Publish odometry *******/
-
-              publish_odometry(pub_odom_aft_mapped, tf_broadcaster);
-              if (runtime_pos_log)
-              {
-                euler_cur = SO3ToEuler(kf_input.x_.rot);
-                fout_out << setw(20) << Measures.lidar_beg_time - first_lidar_time << " "
-                         << euler_cur.transpose() << " " << kf_input.x_.pos.transpose() << " "
-                         << kf_input.x_.vel.transpose() << " " << kf_input.x_.bg.transpose() << " "
-                         << kf_input.x_.ba.transpose() << " " << kf_input.x_.gravity.transpose()
-                         << " " << feats_undistort->points.size() << '\n';
-              }
-            }
-
-            for (int j = 0; j < time_seq[k]; j++)
-            {
-              PointType &point_body_j = feats_down_body->points[idx + j + 1];
-              PointType &point_world_j = feats_down_world->points[idx + j + 1];
-              pointBodyToWorld(&point_body_j, &point_world_j);
-            }
-            solve_time += omp_get_wtime() - solve_start;
-
-            update_time += omp_get_wtime() - t_update_start;
-            idx = idx + time_seq[k];
-          }
-        }
-        else
-        {
-          if (!imu_deque.empty())
-          {
-            imu_last = imu_next;
-            imu_next = *(imu_deque.front());
-            while (get_time_sec(imu_next.header.stamp) > time_current &&
-                   ((get_time_sec(imu_next.header.stamp) <
-                     Measures.lidar_beg_time + lidar_time_inte)))
-            { // >= ?
-              if (is_first_frame)
-              {
-                {
-                  {
-                    while (get_time_sec(imu_next.header.stamp) <
-                           Measures.lidar_beg_time + lidar_time_inte)
-                    {
-                      imu_deque.pop_front();
-                      if (imu_deque.empty())
-                        break;
-                      imu_last = imu_next;
-                      imu_next = *(imu_deque.front());
-                    }
-                  }
-
-                  break;
-                }
-                imu_prop_cov = true;
-
-                t_last = time_current;
-                time_update_last = time_current;
-                input_in.gyro << imu_last.angular_velocity.x, imu_last.angular_velocity.y,
-                    imu_last.angular_velocity.z;
-                input_in.acc << imu_last.linear_acceleration.x, imu_last.linear_acceleration.y,
-                    imu_last.linear_acceleration.z;
-                input_in.acc = input_in.acc * G_m_s2 / acc_norm;
-
-                is_first_frame = false;
-              }
-              time_current = get_time_sec(imu_next.header.stamp);
-
-              if (!is_first_frame)
-              {
-                double dt = time_current - t_last;
-
-                double dt_cov = time_current - time_update_last;
-                if (dt_cov > 0.0)
-                {
-                  // kf_input.predict(dt_cov, Q_input, input_in, false, true);
-                  time_update_last = get_time_sec(imu_next.header.stamp); // time_current;
-                }
-                // kf_input.predict(dt, Q_input, input_in, true, false);
-
-                t_last = get_time_sec(imu_next.header.stamp);
-
-                input_in.gyro << imu_next.angular_velocity.x, imu_next.angular_velocity.y,
-                    imu_next.angular_velocity.z;
-                input_in.acc << imu_next.linear_acceleration.x, imu_next.linear_acceleration.y,
-                    imu_next.linear_acceleration.z;
-                input_in.acc = input_in.acc * G_m_s2 / acc_norm;
-                imu_deque.pop_front();
-                if (imu_deque.empty())
-                  break;
-                imu_last = imu_next;
-                imu_next = *(imu_deque.front());
-              }
-              else
-              {
-                imu_deque.pop_front();
-                if (imu_deque.empty())
-                  break;
-                imu_last = imu_next;
-                imu_next = *(imu_deque.front());
-              }
-            }
-          }
-        }
-      }
       /******* Publish odometry downsample *******/
       if (!publish_odometry_without_downsample)
       {
@@ -1216,25 +918,13 @@ int main(int argc, char **argv)
             aver_time_icp, aver_time_propag);
         if (!publish_odometry_without_downsample)
         {
-          if (!use_imu_as_input)
-          {
-            euler_cur = SO3ToEuler(kf_output.x_.rot);
-            fout_out << setw(20) << Measures.lidar_beg_time - first_lidar_time << " "
-                     << euler_cur.transpose() << " " << kf_output.x_.pos.transpose() << " "
-                     << kf_output.x_.vel.transpose() << " " << kf_output.x_.omg.transpose() << " "
-                     << kf_output.x_.acc.transpose() << " " << kf_output.x_.gravity.transpose()
-                     << " " << kf_output.x_.bg.transpose() << " " << kf_output.x_.ba.transpose()
-                     << " " << feats_undistort->points.size() << '\n';
-          }
-          else
-          {
-            euler_cur = SO3ToEuler(kf_input.x_.rot);
-            fout_out << setw(20) << Measures.lidar_beg_time - first_lidar_time << " "
-                     << euler_cur.transpose() << " " << kf_input.x_.pos.transpose() << " "
-                     << kf_input.x_.vel.transpose() << " " << kf_input.x_.bg.transpose() << " "
-                     << kf_input.x_.ba.transpose() << " " << kf_input.x_.gravity.transpose() << " "
-                     << feats_undistort->points.size() << '\n';
-          }
+          euler_cur = SO3ToEuler(kf_output.x_.rot);
+          fout_out << setw(20) << Measures.lidar_beg_time - first_lidar_time << " "
+                   << euler_cur.transpose() << " " << kf_output.x_.pos.transpose() << " "
+                   << kf_output.x_.vel.transpose() << " " << kf_output.x_.omg.transpose() << " "
+                   << kf_output.x_.acc.transpose() << " " << kf_output.x_.gravity.transpose()
+                   << " " << kf_output.x_.bg.transpose() << " " << kf_output.x_.ba.transpose()
+                   << " " << feats_undistort->points.size() << '\n';
         }
         dump_lio_state_to_log(fp);
       }

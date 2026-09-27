@@ -9,11 +9,10 @@ int ivox_nearby_type = 6;
 
 std::vector<double> extrinT(3, 0.0);
 std::vector<double> extrinR(9, 0.0);
-state_input state_in;
 state_output state_out;
 std::string lid_topic, imu_topic;
 bool prop_at_freq_of_imu = true, check_satu = true, con_frame = false, cut_frame = false;
-bool use_imu_as_input = false, space_down_sample = true,
+bool space_down_sample = true,
      publish_odometry_without_downsample = false;
 int init_map_size = 10, con_frame_num = 1;
 double match_s = 81, satu_acc, satu_gyro, cut_frame_time_interval = 0.1;
@@ -21,7 +20,6 @@ float plane_thr = 0.1f;
 double filter_size_surf_min = 0.5, filter_size_map_min = 0.5, fov_deg = 180;
 // double cube_len = 2000;
 float DET_RANGE = 450;
-bool imu_en = true;
 double imu_time_inte = 0.005;
 double laser_point_cov = 0.01, acc_norm;
 double vel_cov, acc_cov_input, gyr_cov_input;
@@ -56,9 +54,6 @@ void readParameters(std::shared_ptr<rclcpp::Node> & nh)
   try {
     nh->declare_parameter<bool>("prop_at_freq_of_imu", true);
     nh->get_parameter("prop_at_freq_of_imu", prop_at_freq_of_imu);
-
-    nh->declare_parameter<bool>("use_imu_as_input", false);
-    nh->get_parameter("use_imu_as_input", use_imu_as_input);
 
     nh->declare_parameter<bool>("check_satu", true);
     nh->get_parameter("check_satu", check_satu);
@@ -125,9 +120,6 @@ void readParameters(std::shared_ptr<rclcpp::Node> & nh)
 
     nh->declare_parameter<double>("mapping.fov_degree", 180);
     nh->get_parameter("mapping.fov_degree", fov_deg);
-
-    nh->declare_parameter<bool>("mapping.imu_en", true);
-    nh->get_parameter("mapping.imu_en", imu_en);
 
     nh->declare_parameter<bool>("mapping.extrinsic_est_en", true);
     nh->get_parameter("mapping.extrinsic_est_en", extrinsic_est_en);
@@ -281,13 +273,6 @@ void open_file()
     std::cout << "~~~~" << ROOT_DIR << " file opened" << '\n';
   else
     std::cout << "~~~~" << ROOT_DIR << " doesn't exist" << '\n';
-}
-
-void reset_cov(Eigen::Matrix<double, 24, 24> & P_init)
-{
-  P_init = MD(24, 24)::Identity() * 0.1;
-  P_init.block<3, 3>(21, 21) = MD(3, 3)::Identity() * 0.0001;
-  P_init.block<6, 6>(15, 15) = MD(6, 6)::Identity() * 0.001;
 }
 
 void reset_cov_output(Eigen::Matrix<double, 30, 30> & P_init_output)

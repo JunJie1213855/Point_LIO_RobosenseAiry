@@ -24,11 +24,6 @@ typedef MTK::vect<2, double> vect2;
 // 定义
 // 状态为 机体平移p_I_W、机体旋转 R_I_W 、雷达2imu旋转 R_L_I、雷达2imu平移p_L_I、机体速度 v、角速度 w、线性加速度 a、重力向量 g、角速度零偏 bg、加速度零偏 ba
 MTK_BUILD_MANIFOLD(
-  state_input, ((vect3, pos))((SO3, rot))((SO3, offset_R_L_I))((vect3, offset_T_L_I))((vect3, vel))(
-                 (vect3, bg))((vect3, ba))((vect3, gravity)));
-
-// 状态为 机体平移p_I_W、机体旋转 R_I_W 、雷达2imu旋转 R_L_I、雷达2imu平移p_L_I、机体速度 v、重力向量 g、角速度零偏 bg、加速度零偏 ba
-MTK_BUILD_MANIFOLD(
   state_output,
   ((vect3, pos))((SO3, rot))((SO3, offset_R_L_I))((vect3, offset_T_L_I))((vect3, vel))(
     (vect3, omg))((vect3, acc))((vect3, gravity))((vect3, bg))((vect3, ba)));
@@ -42,9 +37,6 @@ MTK_BUILD_MANIFOLD(process_noise_input, ((vect3, ng))((vect3, na))((vect3, nbg))
 // 噪声输出：
 MTK_BUILD_MANIFOLD(
   process_noise_output, ((vect3, vel))((vect3, ng))((vect3, na))((vect3, nbg))((vect3, nba)));
-
-// 状态为 机体平移p_I_W、机体旋转 R_I_W 、雷达2imu旋转 R_L_I、雷达2imu平移p_L_I、机体速度 v、重力向量 g、角速度零偏 bg、加速度零偏 ba
-extern esekfom::esekf<state_input, 24, input_ikfom> kf_input;
 
 // 状态为 机体平移p_I_W、机体旋转 R_I_W 、雷达2imu旋转 R_L_I、雷达2imu平移p_L_I、机体速度 v、角速度 w、线性加速度 a、重力向量 g、角速度零偏 bg、加速度零偏 ba
 extern esekfom::esekf<state_output, 30, input_ikfom> kf_output; // 常使用这个

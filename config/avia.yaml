@@ -1,6 +1,5 @@
 /**:
     ros__parameters:
-        use_imu_as_input: False                             # Change to True to use IMU as input of Point-LIO
         prop_at_freq_of_imu: True
         check_satu: True
         init_map_size: 10
@@ -32,7 +31,6 @@
             blind: 0.5
 
         mapping:
-            imu_en: True
             extrinsic_est_en: False                         # for aggressive motion, set this variable False
             imu_time_inte: 0.005                            # = 1 / frequency of IMU
             lidar_time_inte: 0.1

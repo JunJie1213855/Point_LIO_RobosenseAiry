@@ -44,7 +44,6 @@ public:
   MD(12, 12) state_cov = MD(12, 12)::Identity();
   int lidar_type;
   V3D gravity_;
-  bool imu_en;
   V3D mean_acc;
   bool imu_need_init_ = true;
   bool after_imu_init_ = false;
