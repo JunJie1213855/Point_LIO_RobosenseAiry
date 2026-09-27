@@ -411,6 +411,7 @@ int main(int argc, char ** argv)
   //--------------------------------------------------主线程-----------------------------------------------
   signal(SIGINT, SigHandle);
   rclcpp::Rate rate(500);
+  // 观测更新主循环
   while (rclcpp::ok()) {
     if (flg_exit) break;
     executor.spin_some();
@@ -441,7 +442,7 @@ int main(int argc, char ** argv)
         }
       }
 
-      // 第一帧由于初始化
+      // 第一帧用于初始化
       if (flg_first_scan) {
         first_lidar_time = Measures.lidar_beg_time;
         flg_first_scan = false;
@@ -452,23 +453,21 @@ int main(int argc, char ** argv)
         time_current = 0.0;
         
         if (imu_en) {
-          // 重力对齐
-          // imu_next = *(imu_deque.front());
+          // 重力对齐的参考重力向量
           kf_input.x_.gravity << VEC_FROM_ARRAY(gravity);
           kf_output.x_.gravity << VEC_FROM_ARRAY(gravity);
-          // kf_output.x_.acc << VEC_FROM_ARRAY(gravity);
-          // kf_output.x_.acc *= -1;
-
           {
-            // imu数据时间戳大于第一帧lidar时间戳的数据，可以直接去掉
+            // 当前 imu 数据中，其时间戳小于第一帧lidar时间戳的数据，可以直接去掉
             while (Measures.lidar_beg_time >
                    get_time_sec(imu_next.header.stamp))  // if it is needed for the new map?
             {
-              imu_deque.pop_front();
-              if (imu_deque.empty()) {
+              imu_deque.pop_front(); // 弹出无用的 imu 测量数据
+              
+              if (imu_deque.empty()) // 没有了退出去
+              {
                 break;
               }
-              imu_last = imu_next;
+              imu_last = imu_next;   // 更新最新的 imu 测量数据
               imu_next = *(imu_deque.front());
               // imu_deque.pop();
             }

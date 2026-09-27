@@ -3,7 +3,7 @@ bool data_accum_finished = false, data_accum_start = false, online_calib_finish 
      refine_print = false;
 int frame_num_init = 0;
 double time_lag_IMU_wtr_lidar = 0.0, move_start_time = 0.0,
-       online_calib_starts_time = 0.0;  //, mean_acc_norm = 9.81;
+       online_calib_starts_time = 0.0; //, mean_acc_norm = 9.81;
 double imu_first_time = 0.0;
 bool lose_lid = false;
 double timediff_imu_wrt_lidar = 0.0;
@@ -24,12 +24,13 @@ std::deque<PointCloudXYZI::Ptr> lidar_buffer;
 std::deque<double> time_buffer;
 std::deque<sensor_msgs::msg::Imu::ConstSharedPtr> imu_deque;
 
-void standard_pcl_cbk(const sensor_msgs::msg::PointCloud2::SharedPtr & msg)
+void standard_pcl_cbk(const sensor_msgs::msg::PointCloud2::SharedPtr &msg)
 {
   // mtx_buffer.lock();
   scan_count++;
   double preprocess_start_time = omp_get_wtime();
-  if (rclcpp::Time(msg->header.stamp).seconds() < last_timestamp_lidar) {
+  if (rclcpp::Time(msg->header.stamp).seconds() < last_timestamp_lidar)
+  {
     RCLCPP_ERROR(rclcpp::get_logger("li_initialization"), "lidar loop back, clear buffer");
     return;
   }
@@ -42,23 +43,29 @@ void standard_pcl_cbk(const sensor_msgs::msg::PointCloud2::SharedPtr & msg)
   //     printf("Self sync IMU and LiDAR, HARD time lag is %.10lf \n \n", timediff_imu_wrt_lidar);
   // }
 
-  if ((lidar_type == VELO16 || lidar_type == OUST64 || lidar_type == HESAIxt32) && cut_frame_init) {
+  if ((lidar_type == VELO16 || lidar_type == OUST64 || lidar_type == HESAIxt32) && cut_frame_init)
+  {
     deque<PointCloudXYZI::Ptr> ptr;
     deque<double> timestamp_lidar;
     p_pre->process_cut_frame_pcl2(msg, ptr, timestamp_lidar, cut_frame_num, scan_count);
-    while (!ptr.empty() && !timestamp_lidar.empty()) {
+    while (!ptr.empty() && !timestamp_lidar.empty())
+    {
       lidar_buffer.push_back(ptr.front());
       ptr.pop_front();
-      time_buffer.push_back(timestamp_lidar.front() / double(1000));  //unit:s
+      time_buffer.push_back(timestamp_lidar.front() / double(1000)); // unit:s
       timestamp_lidar.pop_front();
     }
-  } else if (lidar_type == ROBOAIRY && cut_frame_init) {
+  }
+  else if (lidar_type == ROBOAIRY && cut_frame_init)
+  {
     // Airy sub-cloud 拆分: 250ms 扫描拆成 cut_frame_num 个子帧, 每个 ~80ms
-    for (int i_sub = 0; i_sub < cut_frame_num; i_sub++) {
+    for (int i_sub = 0; i_sub < cut_frame_num; i_sub++)
+    {
       double start_time, end_time;
       PointCloudXYZI::Ptr ptr(new PointCloudXYZI());
       p_pre->process(msg, ptr, i_sub, cut_frame_num, start_time, end_time);
-      if (!ptr->points.empty()) {
+      if (!ptr->points.empty())
+      {
         lidar_buffer.push_back(ptr);
         time_buffer.push_back(start_time);
       }
@@ -67,24 +74,32 @@ void standard_pcl_cbk(const sensor_msgs::msg::PointCloud2::SharedPtr & msg)
     if (++sub_cnt % 10 == 1)
       printf("[cbk-airy] split=%d sub_sizes buffer=%zu\n",
              cut_frame_num, lidar_buffer.size());
-  } else {
+  }
+  else
+  {
     PointCloudXYZI::Ptr ptr(new PointCloudXYZI(20000, 1));
     p_pre->process(msg, ptr);
     static int cbk_cnt = 0;
     if (++cbk_cnt % 10 == 1)
       printf("[cbk] scan=%d lidar_type=%d ptr->size=%zu buffer=%zu\n",
              scan_count, lidar_type, ptr->size(), lidar_buffer.size());
-    if (con_frame) {
-      if (frame_ct == 0) {
-        time_con = last_timestamp_lidar;  //msg->header.stamp.toSec();
+    if (con_frame)
+    {
+      if (frame_ct == 0)
+      {
+        time_con = last_timestamp_lidar; // msg->header.stamp.toSec();
       }
-      if (frame_ct < 10) {
-        for (int i = 0; i < ptr->size(); i++) {
+      if (frame_ct < 10)
+      {
+        for (int i = 0; i < ptr->size(); i++)
+        {
           ptr->points[i].curvature += (last_timestamp_lidar - time_con) * 1000;
           ptr_con->push_back(ptr->points[i]);
         }
         frame_ct++;
-      } else {
+      }
+      else
+      {
         PointCloudXYZI::Ptr ptr_con_i(new PointCloudXYZI(10000, 1));
         // std::cout << "ptr div num:" << ptr_div->size() << '\n';
         *ptr_con_i = *ptr_con;
@@ -94,8 +109,11 @@ void standard_pcl_cbk(const sensor_msgs::msg::PointCloud2::SharedPtr & msg)
         ptr_con->clear();
         frame_ct = 0;
       }
-    } else {
-      if (!ptr->points.empty()) {
+    }
+    else
+    {
+      if (!ptr->points.empty())
+      {
         lidar_buffer.emplace_back(ptr);
         time_buffer.emplace_back(rclcpp::Time(msg->header.stamp).seconds());
       }
@@ -106,12 +124,13 @@ void standard_pcl_cbk(const sensor_msgs::msg::PointCloud2::SharedPtr & msg)
   // sig_buffer.notify_all();
 }
 
-void livox_pcl_cbk(const livox_ros_driver2::msg::CustomMsg::SharedPtr & msg)
+void livox_pcl_cbk(const livox_ros_driver2::msg::CustomMsg::SharedPtr &msg)
 {
   // mtx_buffer.lock();
   double preprocess_start_time = omp_get_wtime();
   scan_count++;
-  if (rclcpp::Time(msg->header.stamp).seconds() < last_timestamp_lidar) {
+  if (rclcpp::Time(msg->header.stamp).seconds() < last_timestamp_lidar)
+  {
     RCLCPP_ERROR(rclcpp::get_logger("li_initialization"), "lidar loop back, clear buffer");
     return;
   }
@@ -123,31 +142,41 @@ void livox_pcl_cbk(const livox_ros_driver2::msg::CustomMsg::SharedPtr & msg)
   //     printf("Self sync IMU and LiDAR, HARD time lag is %.10lf \n \n", timediff_imu_wrt_lidar);
   // }
 
-  if (cut_frame_init) {
+  if (cut_frame_init)
+  {
     deque<PointCloudXYZI::Ptr> ptr;
     deque<double> timestamp_lidar;
     p_pre->process_cut_frame_livox(msg, ptr, timestamp_lidar, cut_frame_num, scan_count);
 
-    while (!ptr.empty() && !timestamp_lidar.empty()) {
+    while (!ptr.empty() && !timestamp_lidar.empty())
+    {
       lidar_buffer.push_back(ptr.front());
       ptr.pop_front();
-      time_buffer.push_back(timestamp_lidar.front() / double(1000));  //unit:s
+      time_buffer.push_back(timestamp_lidar.front() / double(1000)); // unit:s
       timestamp_lidar.pop_front();
     }
-  } else {
+  }
+  else
+  {
     PointCloudXYZI::Ptr ptr(new PointCloudXYZI(10000, 1));
     p_pre->process(msg, ptr);
-    if (con_frame) {
-      if (frame_ct == 0) {
-        time_con = last_timestamp_lidar;  //msg->header.stamp.toSec();
+    if (con_frame)
+    {
+      if (frame_ct == 0)
+      {
+        time_con = last_timestamp_lidar; // msg->header.stamp.toSec();
       }
-      if (frame_ct < 10) {
-        for (int i = 0; i < ptr->size(); i++) {
+      if (frame_ct < 10)
+      {
+        for (int i = 0; i < ptr->size(); i++)
+        {
           ptr->points[i].curvature += (last_timestamp_lidar - time_con) * 1000;
           ptr_con->push_back(ptr->points[i]);
         }
         frame_ct++;
-      } else {
+      }
+      else
+      {
         PointCloudXYZI::Ptr ptr_con_i(new PointCloudXYZI(10000, 1));
         // std::cout << "ptr div num:" << ptr_div->size() << '\n';
         *ptr_con_i = *ptr_con;
@@ -157,8 +186,11 @@ void livox_pcl_cbk(const livox_ros_driver2::msg::CustomMsg::SharedPtr & msg)
         ptr_con->clear();
         frame_ct = 0;
       }
-    } else {
-      if (!ptr->points.empty()) {
+    }
+    else
+    {
+      if (!ptr->points.empty())
+      {
         lidar_buffer.emplace_back(ptr);
         time_buffer.emplace_back(rclcpp::Time(msg->header.stamp).seconds());
       }
@@ -169,7 +201,7 @@ void livox_pcl_cbk(const livox_ros_driver2::msg::CustomMsg::SharedPtr & msg)
   // sig_buffer.notify_all();
 }
 
-void imu_cbk(const sensor_msgs::msg::Imu::ConstSharedPtr & msg_in)
+void imu_cbk(const sensor_msgs::msg::Imu::ConstSharedPtr &msg_in)
 {
   // mtx_buffer.lock();
 
@@ -177,12 +209,13 @@ void imu_cbk(const sensor_msgs::msg::Imu::ConstSharedPtr & msg_in)
   // publish_count ++;
 
   msg->header.stamp = get_ros_time(
-    get_time_sec(msg_in->header.stamp) - timediff_imu_wrt_lidar - time_lag_IMU_wtr_lidar);
+      get_time_sec(msg_in->header.stamp) - timediff_imu_wrt_lidar - time_lag_IMU_wtr_lidar);
 
   double timestamp = get_time_sec(msg->header.stamp);
   // printf("time_diff%f, %f, %f\n", last_timestamp_imu - timestamp, last_timestamp_imu, timestamp);
 
-  if (timestamp < last_timestamp_imu) {
+  if (timestamp < last_timestamp_imu)
+  {
     RCLCPP_ERROR(rclcpp::get_logger("li_initialization"), "imu loop back, clear deque");
     // imu_deque.shrink_to_fit();
     // std::cout << "check time:" << timestamp << ";" << last_timestamp_imu << '\n';
@@ -198,27 +231,36 @@ void imu_cbk(const sensor_msgs::msg::Imu::ConstSharedPtr & msg_in)
   // sig_buffer.notify_all();
 }
 
-bool sync_packages(MeasureGroup & meas)
+// imu 和 lidar 测量数据同步
+bool sync_packages(MeasureGroup &meas)
 {
   {
-    if (!imu_en) {
-      if (!lidar_buffer.empty()) {
-        if (!lidar_pushed) {
+    if (!imu_en)
+    { // 不适用 imu 数据，仅仅用 lidar 数据做对齐 =》 这里 point-lio 不会用，应该直接删除代码
+      if (!lidar_buffer.empty())
+      {
+        if (!lidar_pushed)
+        {
           meas.lidar = lidar_buffer.front();
-          meas.lidar_beg_time = time_buffer.front();
+          meas.lidar_beg_time = time_buffer.front(); // 记录雷达的开始时间
           lose_lid = false;
-          if (meas.lidar->points.empty()) {
+          if (meas.lidar->points.empty())
+          {
             std::cout << "lose lidar" << '\n';
             // return false;
             lose_lid = true;
-          } else {
-            double end_time = meas.lidar->points.back().curvature;
-            for (auto pt : meas.lidar->points) {
-              if (pt.curvature > end_time) {
+          }
+          else
+          {
+            double end_time = meas.lidar->points.back().curvature; // 记录雷达内部的结束时间
+            for (auto pt : meas.lidar->points)
+            {
+              if (pt.curvature > end_time) // 防止内部时间未排序，通过记录最大值时间戳更新结束时间
+              {
                 end_time = pt.curvature;
               }
             }
-            lidar_end_time = meas.lidar_beg_time + end_time / double(1000);
+            lidar_end_time = meas.lidar_beg_time + end_time / double(1000); // 将 lidar 内部时间戳进行转换
             meas.lidar_last_time = lidar_end_time;
           }
           lidar_pushed = true;
@@ -227,87 +269,121 @@ bool sync_packages(MeasureGroup & meas)
         time_buffer.pop_front();
         lidar_buffer.pop_front();
         lidar_pushed = false;
-        if (!lose_lid) {
+        if (!lose_lid)
+        {
           return true;
-        } else {
+        }
+        else
+        {
           return false;
         }
       }
       return false;
     }
 
-    if (lidar_buffer.empty() || imu_deque.empty()) {
+    // 需要采用 imu 数据
+    // 检测 lidar 数据和 imu 数据是否都存在
+    if (lidar_buffer.empty() || imu_deque.empty())
+    {
       return false;
     }
     /*** push a lidar scan ***/
-    if (!lidar_pushed) {
+    if (!lidar_pushed)
+    {
       lose_lid = false;
       meas.lidar = lidar_buffer.front();
       meas.lidar_beg_time = time_buffer.front();
-      if (meas.lidar->points.size() < 1) {
+
+      // 雷达数据采集有效性
+      if (meas.lidar->points.size() < 1)
+      {
         std::cout << "lose lidar" << '\n';
         lose_lid = true;
-        // lidar_buffer.pop_front();
-        // time_buffer.pop_front();
-        // return false;
-      } else {
+      }
+      else
+      {
+        // 初始化结束时间
         double end_time = meas.lidar->points.back().curvature;
-        for (auto pt : meas.lidar->points) {
-          if (pt.curvature > end_time) {
+
+        // 遍历所有三维点，更新雷达内部结束时间
+        for (auto pt : meas.lidar->points)
+        {
+          if (pt.curvature > end_time)
+          {
             end_time = pt.curvature;
           }
         }
+        // 统一转换为时间戳
         lidar_end_time = meas.lidar_beg_time + end_time / double(1000);
         // std::cout << "check time lidar:" << end_time << '\n';
         meas.lidar_last_time = lidar_end_time;
       }
       lidar_pushed = true;
     }
-
-    if (!lose_lid && (last_timestamp_imu < lidar_end_time)) {
+    // 在将 IMU 压入对齐组之前，必须确保当前 IMU 缓冲区中的最新数据时间（last_timestamp_imu）能够覆盖当前点云帧的时间跨度：
+    // 在点云不丢帧的情况下，如果雷达结束时间大于了最新的 imu 时间，时钟同步失败
+    // 原因：雷达点云去畸变是通过imu前向传播后，再用插值来做的，如果imu数据没有在雷达数据末尾时间的点存在，那么这个结束时间的点就无法做插值
+    if (!lose_lid && (last_timestamp_imu < lidar_end_time))
+    {
       return false;
     }
-    if (lose_lid && last_timestamp_imu < meas.lidar_beg_time + lidar_time_inte) {
+
+    // 在点云丢帧的情况下，使用估计的时间间隔 meas.lidar_beg_time + lidar_time_inte 作为判定依据，确保即使激光丢失，IMU 也能按大致相同的时间步长向前推进。
+    if (lose_lid && last_timestamp_imu < meas.lidar_beg_time + lidar_time_inte)
+    {
       return false;
     }
 
-    if (!lose_lid && !imu_pushed) {
+    // 点云正常：提取所有满足 imu_time < lidar_end_time 的 IMU 帧。
+    if (!lose_lid && !imu_pushed)
+    {
       /*** push imu data, and pop from imu buffer ***/
-      if (p_imu->imu_need_init_) {
+      if (p_imu->imu_need_init_)
+      {
         double imu_time = get_time_sec(imu_deque.front()->header.stamp);
+        // 在提取过程中同步更新全局状态 imu_last 和 imu_next，用于后续预积分或插值拟合。
         imu_next = *(imu_deque.front());
         meas.imu.shrink_to_fit();
-        while (imu_time < lidar_end_time) {
+        while (imu_time < lidar_end_time)
+        {
           meas.imu.emplace_back(imu_deque.front());
-          imu_last = imu_next;
+          imu_last = imu_next;               // 位于同步时间窗口内（lidar_end_time）的最后一帧 IMU 测量数据。
           imu_deque.pop_front();
-          if (imu_deque.empty()) break;
-          imu_time = get_time_sec(imu_deque.front()->header.stamp);  // can be changed
-          imu_next = *(imu_deque.front());
+          if (imu_deque.empty())
+            break;
+          imu_time = get_time_sec(imu_deque.front()->header.stamp); // can be changed
+          imu_next = *(imu_deque.front());  //  刚好超出同步时间窗口（lidar_end_time）的第一帧 IMU 测量数据。
         }
       }
       imu_pushed = true;
     }
 
-    if (lose_lid && !imu_pushed) {
+    // 点云丢失：提取所有满足 imu_time < meas.lidar_beg_time + lidar_time_inte 的 IMU 帧。
+    if (lose_lid && !imu_pushed)
+    {
       /*** push imu data, and pop from imu buffer ***/
-      if (p_imu->imu_need_init_) {
+      if (p_imu->imu_need_init_)
+      {
         double imu_time = get_time_sec(imu_deque.front()->header.stamp);
         meas.imu.shrink_to_fit();
 
         imu_next = *(imu_deque.front());
-        while (imu_time < meas.lidar_beg_time + lidar_time_inte) {
+        while (imu_time < meas.lidar_beg_time + lidar_time_inte)
+        {
           meas.imu.emplace_back(imu_deque.front());
-          imu_last = imu_next;
+          imu_last = imu_next;             // 位于同步时间窗口内（lidar_end_time）的最后一帧 IMU 测量数据。
           imu_deque.pop_front();
-          if (imu_deque.empty()) break;
-          imu_time = get_time_sec(imu_deque.front()->header.stamp);  // can be changed
-          imu_next = *(imu_deque.front());
+          if (imu_deque.empty())
+            break;
+          imu_time = get_time_sec(imu_deque.front()->header.stamp); // can be changed
+          imu_next = *(imu_deque.front());  //  刚好超出同步时间窗口（lidar_end_time）的第一帧 IMU 测量数据。
         }
       }
       imu_pushed = true;
     }
 
+    // imu_last - p  - imu_next 表示可以使用  [imu_last, imu_next] 插值 三维点 p
+    // 清理缓冲区与完成同步
     lidar_buffer.pop_front();
     time_buffer.pop_front();
     lidar_pushed = false;
